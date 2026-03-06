@@ -1,7 +1,7 @@
-import TasksView from "./components/TasksView";
 "use client";
 
 import { useState, useEffect } from "react";
+import TasksView from "./components/TasksView";
 import "./globals.css";
 
 // ============================================
