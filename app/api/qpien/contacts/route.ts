@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { qpienFetch } from "../../lib/qpien";
+import { qpienFetch } from "../../../lib/qpien";
 
 export async function GET() {
   try {

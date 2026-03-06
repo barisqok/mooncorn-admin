@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getQpienToken, qpienFetch } from "../../lib/qpien";
+import { getQpienToken, qpienFetch } from "../../../lib/qpien";
 
 export async function GET() {
   const results: Record<string, unknown> = {
