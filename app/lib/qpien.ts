@@ -67,31 +67,26 @@ export async function qpienQuery(query: string, variables: Record<string, unknow
   return result.data;
 }
 
+export async function getChannels() {
+  return qpienQuery("query ExternalGetAllConnectedPlatformList { externalGetAllConnectedPlatformList { success data { _id name status channelId channelType senderEmailAddress } code message } }");
+}
+
 export async function getConversationList(page: number = 1, limit: number = 20) {
-  const q = "query { externalGetConversationList(page: " + page + ", limit: " + limit + ") { success data { docs { _id status priority lastMessage { content createdAt channelType senderType } tags { _id name color } channels { _id name type } } hasNextPage totalDocs } code message } }";
-  return qpienQuery(q);
+  return qpienQuery("query ExternalGetConversationList($page: Int, $limit: Int) { externalGetConversationList(page: $page, limit: $limit) { success data { docs { _id status priority lastMessage { content createdAt channelType senderType } tags { _id name color } } hasNextPage totalDocs } code message } }", { page, limit });
 }
 
 export async function getConversation(id: string) {
-  const q = 'query { externalGetConversation(conversationId: "' + id + '") { success data { _id status priority lastMessage { content createdAt channelType senderType } tags { _id name color } channels { _id name type } } code message } }';
-  return qpienQuery(q);
+  return qpienQuery("query ExternalGetConversation($conversationId: ID!) { externalGetConversation(conversationId: $conversationId) { success data { _id status priority lastMessage { content createdAt channelType senderType } tags { _id name color } } code message } }", { conversationId: id });
 }
 
 export async function getMessageList(conversationId: string, page: number = 1, limit: number = 30) {
-  const q = 'query { externalGetMessageList(conversationId: "' + conversationId + '", page: ' + page + ', limit: ' + limit + ') { success data { docs { _id content messageType channelType senderType createdAt } hasNextPage totalDocs } code message } }';
-  return qpienQuery(q);
+  return qpienQuery("query ExternalGetMessageList($conversationId: ID!, $page: Int, $limit: Int) { externalGetMessageList(conversationId: $conversationId, page: $page, limit: $limit) { success data { docs { _id content messageType channelType senderType createdAt } hasNextPage totalDocs } code message } }", { conversationId, page, limit });
 }
 
 export async function createMessage(conversationId: string, content: string) {
-  const q = 'mutation { externalCreateMessage(conversationId: "' + conversationId + '", content: "' + content + '") { success data { _id content createdAt } code message } }';
-  return qpienQuery(q);
-}
-
-export async function getChannels() {
-  return qpienQuery("query { externalGetChannels { success data { _id name type } code message } }");
+  return qpienQuery("mutation ExternalCreateMessage($conversationId: ID!, $content: String!) { externalCreateMessage(conversationId: $conversationId, content: $content) { success data { _id content createdAt } code message } }", { conversationId, content });
 }
 
 export async function getContactList(page: number = 1, limit: number = 20) {
-  const q = "query { externalGetContactList(page: " + page + ", limit: " + limit + ") { success data { docs { _id name email phone } hasNextPage totalDocs } code message } }";
-  return qpienQuery(q);
+  return qpienQuery("query ExternalGetContactList($page: Int, $limit: Int) { externalGetContactList(page: $page, limit: $limit) { success data { docs { _id name email phone } hasNextPage totalDocs } code message } }", { page, limit });
 }
