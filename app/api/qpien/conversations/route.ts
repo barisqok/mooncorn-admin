@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
-import { qpienFetch } from "../../../lib/qpien";
+import { NextRequest, NextResponse } from "next/server";
+import { getConversationList } from "../../../lib/qpien";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const data = await qpienFetch("/conversations?limit=50&sort=-updatedAt");
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+
+    const data = await getConversationList(page, limit);
     return NextResponse.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Bilinmeyen hata";
-    console.error("Conversations hatası:", message);
-    return NextResponse.json(
-      { error: message, conversations: [] },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

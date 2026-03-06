@@ -1,19 +1,16 @@
-// Qpien API Helper
-// OAuth2 client credentials flow
+// Qpien GraphQL API Helper
+// API URL: https://api.qpien.com/api/v1
+// Auth: generateOAuthToken mutation → Bearer token (1 hour)
 
-const QPIEN_BASE_URL = "https://api.qpien.com/api/v1";
-
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-}
+const QPIEN_API_URL = "https://api.qpien.com/api/v1";
 
 let cachedToken: string | null = null;
 let tokenExpiry: number = 0;
 
+// ============================================
+// AUTH: Get OAuth Token
+// ============================================
 export async function getQpienToken(): Promise<string> {
-  // Return cached token if still valid
   if (cachedToken && Date.now() < tokenExpiry) {
     return cachedToken;
   }
@@ -25,45 +22,264 @@ export async function getQpienToken(): Promise<string> {
     throw new Error("QPIEN_CLIENT_ID veya QPIEN_CLIENT_SECRET tanımlanmamış");
   }
 
-  const response = await fetch("https://api.qpien.com/oauth/token", {
+  const query = `
+    mutation GenerateOAuthToken($clientId: String!, $clientSecret: String!) {
+      generateOAuthToken(clientId: $clientId, clientSecret: $clientSecret) {
+        success
+        data {
+          accessToken
+        }
+        code
+        message
+      }
+    }
+  `;
+
+  const response = await fetch(QPIEN_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
+      query,
+      variables: { clientId, clientSecret },
     }),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Qpien auth hatası: ${response.status} - ${errorText}`);
+    const text = await response.text();
+    throw new Error(`Qpien auth HTTP hatası: ${response.status} - ${text.substring(0, 200)}`);
   }
 
-  const data: TokenResponse = await response.json();
-  cachedToken = data.access_token;
-  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000; // 1 dk erken expire et
+  const result = await response.json();
 
-  return cachedToken;
+  if (result.errors) {
+    throw new Error(`Qpien auth GraphQL hatası: ${JSON.stringify(result.errors)}`);
+  }
+
+  const tokenData = result.data?.generateOAuthToken;
+  if (!tokenData?.success || !tokenData?.data?.accessToken) {
+    throw new Error(`Qpien token alınamadı: ${tokenData?.message || "Bilinmeyen hata"}`);
+  }
+
+  cachedToken = tokenData.data.accessToken;
+  tokenExpiry = Date.now() + 55 * 60 * 1000; // 55 dakika (5 dk güvenlik payı)
+
+  return cachedToken!;
 }
 
-export async function qpienFetch(endpoint: string, options: RequestInit = {}) {
+// ============================================
+// GRAPHQL HELPER
+// ============================================
+export async function qpienQuery(query: string, variables: Record<string, unknown> = {}) {
   const token = await getQpienToken();
 
-  const response = await fetch(`${QPIEN_BASE_URL}${endpoint}`, {
-    ...options,
+  const response = await fetch(QPIEN_API_URL, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
+      Authorization: token,
     },
+    body: JSON.stringify({ query, variables }),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Qpien API Hatası [${endpoint}]:`, response.status, errorText);
-    throw new Error(`Qpien API hatası: ${response.status}`);
+    const text = await response.text();
+    throw new Error(`Qpien API HTTP hatası: ${response.status} - ${text.substring(0, 200)}`);
   }
 
-  return response.json();
+  const result = await response.json();
+
+  if (result.errors) {
+    console.error("Qpien GraphQL Errors:", result.errors);
+    throw new Error(`Qpien GraphQL hatası: ${result.errors[0]?.message || "Bilinmeyen hata"}`);
+  }
+
+  return result.data;
+}
+
+// ============================================
+// CONVERSATIONS
+// ============================================
+export async function getConversationList(page: number = 1, limit: number = 20) {
+  const query = `
+    query ExternalGetConversationList($page: Int, $limit: Int) {
+      externalGetConversationList(page: $page, limit: $limit) {
+        success
+        data {
+          docs {
+            _id
+            customer
+            status
+            isStarred
+            priority
+            type
+            lastMessage {
+              content
+              createdAt
+              channelType
+              senderType
+            }
+            tags {
+              _id
+              name
+              color
+            }
+            channels {
+              _id
+              name
+              type
+            }
+            joinedPerson
+            joinedCPerson
+            createdAt
+            updatedAt
+          }
+          hasNextPage
+          totalDocs
+        }
+        code
+        message
+      }
+    }
+  `;
+  return qpienQuery(query, { page, limit });
+}
+
+export async function getConversation(conversationId: string) {
+  const query = `
+    query ExternalGetConversation($conversationId: ID!) {
+      externalGetConversation(conversationId: $conversationId) {
+        success
+        data {
+          _id
+          customer
+          status
+          isStarred
+          priority
+          type
+          lastMessage {
+            content
+            createdAt
+            channelType
+            senderType
+          }
+          tags {
+            _id
+            name
+            color
+          }
+          channels {
+            _id
+            name
+            type
+          }
+        }
+        code
+        message
+      }
+    }
+  `;
+  return qpienQuery(query, { conversationId });
+}
+
+// ============================================
+// MESSAGES
+// ============================================
+export async function getMessageList(conversationId: string, page: number = 1, limit: number = 30) {
+  const query = `
+    query ExternalGetMessageList($conversationId: ID!, $page: Int, $limit: Int) {
+      externalGetMessageList(conversationId: $conversationId, page: $page, limit: $limit) {
+        success
+        data {
+          docs {
+            _id
+            content
+            contentHtml
+            messageType
+            channelType
+            senderType
+            sender {
+              name
+              avatar
+            }
+            media {
+              url
+              type
+            }
+            createdAt
+            ackStatus
+          }
+          hasNextPage
+          totalDocs
+        }
+        code
+        message
+      }
+    }
+  `;
+  return qpienQuery(query, { conversationId, page, limit });
+}
+
+export async function createMessage(conversationId: string, content: string) {
+  const query = `
+    mutation ExternalCreateMessage($conversationId: ID!, $content: String!) {
+      externalCreateMessage(conversationId: $conversationId, content: $content) {
+        success
+        data {
+          _id
+          content
+          createdAt
+        }
+        code
+        message
+      }
+    }
+  `;
+  return qpienQuery(query, { conversationId, content });
+}
+
+// ============================================
+// CHANNELS
+// ============================================
+export async function getChannels() {
+  const query = `
+    query ExternalGetChannels {
+      externalGetChannels {
+        success
+        data {
+          _id
+          name
+          type
+        }
+        code
+        message
+      }
+    }
+  `;
+  return qpienQuery(query);
+}
+
+// ============================================
+// CONTACTS
+// ============================================
+export async function getContactList(page: number = 1, limit: number = 20) {
+  const query = `
+    query ExternalGetContactList($page: Int, $limit: Int) {
+      externalGetContactList(page: $page, limit: $limit) {
+        success
+        data {
+          docs {
+            _id
+            name
+            email
+            phone
+          }
+          hasNextPage
+          totalDocs
+        }
+        code
+        message
+      }
+    }
+  `;
+  return qpienQuery(query, { page, limit });
 }
