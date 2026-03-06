@@ -23,8 +23,8 @@ export async function getQpienToken(): Promise<string> {
   }
 
   const query = `
-    mutation GenerateOAuthToken($clientId: String!, $clientSecret: String!) {
-      generateOAuthToken(clientId: $clientId, clientSecret: $clientSecret) {
+    mutation GenerateOAuthToken($client_id: String!, $client_secret: String!) {
+      generateOAuthToken(client_id: $client_id, client_secret: $client_secret) {
         success
         data {
           accessToken
@@ -40,7 +40,7 @@ export async function getQpienToken(): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query,
-      variables: { clientId, clientSecret },
+      variables: { client_id: clientId, client_secret: clientSecret },
     }),
   });
 
