@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getQpienToken, getConversationList, getChannels } from "../../../lib/qpien";
+import { getQpienToken, getConversationList, getChannels, qpienQuery } from "../../../lib/qpien";
 
 export async function GET() {
   const results: Record<string, unknown> = {
@@ -32,7 +32,7 @@ export async function GET() {
 
   // Test 3: Conversations
   try {
-    const data = await getConversationList(1, 3);
+    const data = await qpienQuery("query { externalGetConversationList { success data { docs { _id status priority lastMessage { content createdAt channelType senderType } } hasNextPage totalDocs } code message } }");
     results.conversations = { status: "✅ Başarılı", data };
   } catch (error: unknown) {
     results.conversations = `❌ ${error instanceof Error ? error.message : String(error)}`;
