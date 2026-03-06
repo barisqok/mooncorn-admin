@@ -1,15 +1,8 @@
-// Qpien GraphQL API Helper
-// API URL: https://api.qpien.com/api/v1
-// Auth: generateOAuthToken mutation → Bearer token (1 hour)
-
 const QPIEN_API_URL = "https://api.qpien.com/api/v1";
 
 let cachedToken: string | null = null;
 let tokenExpiry: number = 0;
 
-// ============================================
-// AUTH: Get OAuth Token
-// ============================================
 export async function getQpienToken(): Promise<string> {
   if (cachedToken && Date.now() < tokenExpiry) {
     return cachedToken;
@@ -22,25 +15,11 @@ export async function getQpienToken(): Promise<string> {
     throw new Error("QPIEN_CLIENT_ID veya QPIEN_CLIENT_SECRET tanımlanmamış");
   }
 
-  const query = `
-    mutation GenerateOAuthToken($client_id: String!, $client_secret: String!) {
-      generateOAuthToken(client_id: $client_id, client_secret: $client_secret) {
-        success
-        data {
-          accessToken
-        }
-        code
-        message
-      }
-    }
-  `;
-
   const response = await fetch(QPIEN_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      query,
-      variables: { client_id: clientId, client_secret: clientSecret },
+      query: `mutation { generateOAuthToken(clientId: "${clientId}", clientSecret: "${clientSecret}") { accessToken expiresIn } }`,
     }),
   });
 
@@ -52,23 +31,19 @@ export async function getQpienToken(): Promise<string> {
   const result = await response.json();
 
   if (result.errors) {
-    throw new Error(`Qpien auth GraphQL hatası: ${JSON.stringify(result.errors)}`);
+    throw new Error(`Qpien auth hatası: ${JSON.stringify(result.errors)}`);
   }
 
   const tokenData = result.data?.generateOAuthToken;
-  if (!tokenData?.success || !tokenData?.data?.accessToken) {
-    throw new Error(`Qpien token alınamadı: ${tokenData?.message || "Bilinmeyen hata"}`);
+  if (!tokenData?.accessToken) {
+    throw new Error(`Token alınamadı: ${JSON.stringify(result)}`);
   }
 
-  cachedToken = tokenData.data.accessToken;
-  tokenExpiry = Date.now() + 55 * 60 * 1000; // 55 dakika (5 dk güvenlik payı)
-
+  cachedToken = tokenData.accessToken;
+  tokenExpiry = Date.now() + 55 * 60 * 1000;
   return cachedToken!;
 }
 
-// ============================================
-// GRAPHQL HELPER
-// ============================================
 export async function qpienQuery(query: string, variables: Record<string, unknown> = {}) {
   const token = await getQpienToken();
 
@@ -83,203 +58,36 @@ export async function qpienQuery(query: string, variables: Record<string, unknow
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Qpien API HTTP hatası: ${response.status} - ${text.substring(0, 200)}`);
+    throw new Error(`Qpien API hatası: ${response.status} - ${text.substring(0, 200)}`);
   }
 
   const result = await response.json();
-
   if (result.errors) {
-    console.error("Qpien GraphQL Errors:", result.errors);
-    throw new Error(`Qpien GraphQL hatası: ${result.errors[0]?.message || "Bilinmeyen hata"}`);
+    throw new Error(`GraphQL hatası: ${result.errors[0]?.message || JSON.stringify(result.errors)}`);
   }
-
   return result.data;
 }
 
-// ============================================
-// CONVERSATIONS
-// ============================================
 export async function getConversationList(page: number = 1, limit: number = 20) {
-  const query = `
-    query ExternalGetConversationList($page: Int, $limit: Int) {
-      externalGetConversationList(page: $page, limit: $limit) {
-        success
-        data {
-          docs {
-            _id
-            customer
-            status
-            isStarred
-            priority
-            type
-            lastMessage {
-              content
-              createdAt
-              channelType
-              senderType
-            }
-            tags {
-              _id
-              name
-              color
-            }
-            channels {
-              _id
-              name
-              type
-            }
-            joinedPerson
-            joinedCPerson
-            createdAt
-            updatedAt
-          }
-          hasNextPage
-          totalDocs
-        }
-        code
-        message
-      }
-    }
-  `;
-  return qpienQuery(query, { page, limit });
+  return qpienQuery(`query { externalGetConversationList(page: ${page}, limit: ${limit}) { success data { docs { _id status priority lastMessage { content createdAt channelType senderType } tags { _id name color } channels { _id name type } } hasNextPage totalDocs } code message } }`);
 }
 
 export async function getConversation(conversationId: string) {
-  const query = `
-    query ExternalGetConversation($conversationId: ID!) {
-      externalGetConversation(conversationId: $conversationId) {
-        success
-        data {
-          _id
-          customer
-          status
-          isStarred
-          priority
-          type
-          lastMessage {
-            content
-            createdAt
-            channelType
-            senderType
-          }
-          tags {
-            _id
-            name
-            color
-          }
-          channels {
-            _id
-            name
-            type
-          }
-        }
-        code
-        message
-      }
-    }
-  `;
-  return qpienQuery(query, { conversationId });
+  return qpienQuery(`query { externalGetConversation(conversationId: "${conversationId}") { success data { _id status priority lastMessage { content createdAt channelType senderType } tags { _id name color } channels { _id name type } } code message } }`);
 }
 
-// ============================================
-// MESSAGES
-// ============================================
 export async function getMessageList(conversationId: string, page: number = 1, limit: number = 30) {
-  const query = `
-    query ExternalGetMessageList($conversationId: ID!, $page: Int, $limit: Int) {
-      externalGetMessageList(conversationId: $conversationId, page: $page, limit: $limit) {
-        success
-        data {
-          docs {
-            _id
-            content
-            contentHtml
-            messageType
-            channelType
-            senderType
-            sender {
-              name
-              avatar
-            }
-            media {
-              url
-              type
-            }
-            createdAt
-            ackStatus
-          }
-          hasNextPage
-          totalDocs
-        }
-        code
-        message
-      }
-    }
-  `;
-  return qpienQuery(query, { conversationId, page, limit });
+  return qpienQuery(`query { externalGetMessageList(conversationId: "${conversationId}", page: ${page}, limit: ${limit}) { success data { docs { _id content messageType channelType senderType createdAt } hasNextPage totalDocs } code message } }`);
 }
 
 export async function createMessage(conversationId: string, content: string) {
-  const query = `
-    mutation ExternalCreateMessage($conversationId: ID!, $content: String!) {
-      externalCreateMessage(conversationId: $conversationId, content: $content) {
-        success
-        data {
-          _id
-          content
-          createdAt
-        }
-        code
-        message
-      }
-    }
-  `;
-  return qpienQuery(query, { conversationId, content });
+  return qpienQuery(`mutation { externalCreateMessage(conversationId: "${conversationId}", content: "${content}") { success data { _id content createdAt } code message } }`);
 }
 
-// ============================================
-// CHANNELS
-// ============================================
 export async function getChannels() {
-  const query = `
-    query ExternalGetChannels {
-      externalGetChannels {
-        success
-        data {
-          _id
-          name
-          type
-        }
-        code
-        message
-      }
-    }
-  `;
-  return qpienQuery(query);
+  return qpienQuery(`query { externalGetChannels { success data { _id name type } code message } }`);
 }
 
-// ============================================
-// CONTACTS
-// ============================================
 export async function getContactList(page: number = 1, limit: number = 20) {
-  const query = `
-    query ExternalGetContactList($page: Int, $limit: Int) {
-      externalGetContactList(page: $page, limit: $limit) {
-        success
-        data {
-          docs {
-            _id
-            name
-            email
-            phone
-          }
-          hasNextPage
-          totalDocs
-        }
-        code
-        message
-      }
-    }
-  `;
-  return qpienQuery(query, { page, limit });
+  return qpienQuery(`query { externalGetContactList(page: ${page}, limit: ${limit}) { success data { docs { _id name email phone } hasNextPage totalDocs } code message } }`);
 }
