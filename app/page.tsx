@@ -1,3 +1,4 @@
+import TasksView from "./components/TasksView";
 "use client";
 
 import { useState, useEffect } from "react";
@@ -193,6 +194,7 @@ const navItems = [
   { id: "orders", label: "Siparişler", icon: "📦" },
   { id: "products", label: "Ürünler", icon: "🛒" },
   { id: "reports", label: "Raporlar", icon: "📈" },
+  { id: "tasks", label: "Görevler", icon: "📌" },
   { id: "integrations", label: "Entegrasyonlar", icon: "🔗" },
   { id: "settings", label: "Ayarlar", icon: "⚙️" },
 ];
@@ -845,6 +847,7 @@ export default function Home() {
           {activeTab === "products" && <ProductsView />}
           {activeTab === "reports" && <ReportsView />}
           {activeTab === "integrations" && <IntegrationsView />}
+          {activeTab === "tasks" && <TasksView />}
           {activeTab === "settings" && <SettingsView />}
         </div>
       </main>
